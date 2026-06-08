@@ -1,0 +1,76 @@
+Tu peux afficher de vraies images dans un GUI Bedrock, mais pas avec les UI JSON classiques.
+Les serveurs qui y arrivent utilisent une seule technique autorisée par Mojang : les FormUI (aussi appelés “Modal Forms / Custom Forms”) qui acceptent des images via URL ou via des textures du pack.
+
+🎯 La vérité : les GUI JSON normaux ne peuvent PAS afficher d’images
+Les écrans créés via :
+
+ui/*.json dans le resource pack
+
+les écrans d’inventaire custom
+
+les écrans de blocs interactifs
+➡️ ne supportent pas les images externes.
+Ils ne peuvent afficher que :
+
+du texte
+
+des boutons stylisés
+
+des textures déjà présentes dans le pack (et encore, seulement dans certains widgets)
+
+C’est pour ça que ton IA “spécialisée code” ne trouve rien : la documentation officielle ne permet pas d’ajouter des images dans les UI JSON.
+
+✔️ La seule méthode qui marche : les FormUI (API Bedrock Server / Script API)
+Les serveurs Bedrock utilisent les formulaires officiels :
+
+1. SimpleForm
+Permet d’ajouter des boutons avec :
+
+image URL
+
+image de texture pack
+
+image d’item
+
+2. ModalForm
+Pas d’images.
+
+3. CustomForm
+Pas d’images non plus.
+
+Donc seul SimpleForm permet d’afficher de vraies images.
+
+🧪 Exemple complet : afficher une image via Script API
+js
+import { ActionFormData } from "@minecraft/server-ui";
+
+const form = new ActionFormData()
+    .title("Mon Image")
+    .body("Voici une image chargée depuis une URL")
+    .button("Clique ici", "https://i.imgur.com/abcd1234.png");
+
+form.show(player);
+👉 L’image s’affiche réellement dans le GUI, même si elle vient d’Internet.
+C’est exactement ce que font les serveurs comme Lifeboat, Hive, Galaxite, etc.
+
+🧱 Exemple avec texture pack (si tu veux embarquer l’image dans ton addon)
+Place ton image dans :
+
+Code
+resource_pack/textures/ui/mon_image.png
+Puis dans ton script :
+
+js
+.button("Bouton", "textures/ui/mon_image.png");
+
+🧩 Résumé clair
+Méthode	Images ?	Utilisation
+UI JSON (resource pack)	❌ Non	Inventaires, écrans custom
+CustomForm	❌ Non	Formulaires complexes
+ModalForm	❌ Non	Oui/Non
+SimpleForm	✅ Oui (URL ou texture)	Menus avec images (serveurs)
+
+
+🎯 Conclusion
+👉 Pour avoir une vraie image dans un GUI Bedrock, tu dois utiliser un SimpleForm via la Script API.  
+Les UI JSON ne le permettent pas, même en 2026.

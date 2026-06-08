@@ -1,0 +1,17 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "linucraft (Resources,v1.0.0)",
+    "description": "Textures de linucraft (v1.0.0) (logo du terminal), par Elmart38.",
+    "uuid": "f8e967d8-120b-4ded-9f52-2853928592d7",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 21, 90]
+  },
+  "modules": [
+    {
+      "type": "resources",
+      "uuid": "d64bc212-7e95-4e4b-a07e-ed3a2d72d593",
+      "version": [1, 0, 0]
+    }
+  ]
+}
