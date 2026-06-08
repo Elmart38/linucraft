@@ -35,7 +35,7 @@ export function displayCwd(session, fs) {
 }
 
 export function prompt(session, fs) {
-  return `${session.user}@lincraft:${displayCwd(session, fs)}$ `;
+  return `${session.user}@linucraft:${displayCwd(session, fs)}$ `;
 }
 
 // Tokenise une ligne (gestion minimale des guillemets " et ').

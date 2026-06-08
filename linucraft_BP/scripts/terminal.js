@@ -9,7 +9,7 @@ import { createSession, runLine } from "./shell.js";
 // (ModalForm : historique en label + champ de saisie).
 // ---------------------------------------------------------------------------
 
-const LOGO = "textures/ui/lincraft_logo.png";
+const LOGO = "textures/ui/linucraft_logo.png";
 const VISIBLE_LINES = 50;
 
 function renderScrollback(session) {
@@ -24,7 +24,7 @@ export function openLincraft(player) {
   const session = createSession(player, fs);
 
   const boot = new ActionFormData()
-    .title("lincraft 1.0")
+    .title("linucraft 1.0")
     .body("§7Système prêt.§r\nAppuie sur le bouton pour ouvrir le terminal.")
     .button("Entrer dans le terminal", LOGO);
 
@@ -37,7 +37,7 @@ export function openLincraft(player) {
 /** Boucle du terminal : affiche l'historique, lit une commande, recommence. */
 function openTerminal(session, fs) {
   const form = new ModalFormData()
-    .title("lincraft — terminal")
+    .title("linucraft — terminal")
     .label(renderScrollback(session))
     .textField("", "tape une commande… (ex: ls, help, cat /etc/motd)")
     .toggle("Quitter le terminal", false);

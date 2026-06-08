@@ -1,4 +1,4 @@
-# lincraft — un terminal « Linux » dans Minecraft Bedrock
+# linucraft — un terminal « Linux » dans Minecraft Bedrock
 
 Addon (Behavior Pack + Resource Pack) qui ajoute un **terminal Linux simulé** dans
 Minecraft Bedrock. On l'ouvre avec une commande, on tape des commandes de base, et le
@@ -6,14 +6,14 @@ système de fichiers est **sauvegardé dans le monde**.
 
 > ⚠️ **Ce que c'est (et n'est pas).** Les addons Bedrock tournent dans un bac à sable
 > JavaScript : impossible d'exécuter un vrai noyau Linux ou d'écrire de vrais fichiers dans
-> `worlds/<monde>/...`. lincraft **simule** un shell + un système de fichiers en JS, persisté
+> `worlds/<monde>/...`. linucraft **simule** un shell + un système de fichiers en JS, persisté
 > dans les *dynamic properties* du monde (donc par-monde, comme voulu). Le rendu et l'usage
 > sont ceux d'un terminal ; le moteur, non.
 
 ## Lancer le terminal
 
-- Commande : **`/lincraft:start`** (l'API Bedrock impose un namespace, d'où le `:`).
-- Ou bien : taper **`lincraft`** dans le chat (sans `/`).
+- Commande : **`/linucraft:start`** (l'API Bedrock impose un namespace, d'où le `:`).
+- Ou bien : taper **`linucraft`** dans le chat (sans `/`).
 
 Un écran de boot avec le logo s'affiche → bouton **« Entrer dans le terminal »** → la fenêtre
 du terminal s'ouvre (historique en haut, champ de saisie en bas). Tape une commande puis
@@ -56,21 +56,21 @@ Copie :
 ### Méthode 2 — fichier `.mcaddon` (pour partager)
 
 ```
-./build_mcaddon.sh      # crée lincraft.mcaddon
+./build_mcaddon.sh      # crée linucraft.mcaddon
 ```
 
-Double-clique sur `lincraft.mcaddon` (côté Windows) : Minecraft importe les deux packs.
+Double-clique sur `linucraft.mcaddon` (côté Windows) : Minecraft importe les deux packs.
 
 ### Activer dans un monde
 
-Crée/édite un monde → **Packs de comportements** : ajoute « lincraft (Behavior) ». Le pack de
+Crée/édite un monde → **Packs de comportements** : ajoute « linucraft (Behavior) ». Le pack de
 ressources s'ajoute automatiquement (dépendance). Aucune API beta à cocher (les *Custom
 Commands* sont stables). Il faut **Minecraft ~1.21.90+**.
 
 ## Personnaliser
 
-- **Logo** : remplace `linucraft_RP/textures/ui/lincraft_logo.png` (PNG carré, ~128–256 px).
-- **Nom de la commande** : change `name: "lincraft:start"` dans
+- **Logo** : remplace `linucraft_RP/textures/ui/linucraft_logo.png` (PNG carré, ~128–256 px).
+- **Nom de la commande** : change `name: "linucraft:start"` dans
   [main.js](linucraft_BP/scripts/main.js) (garde un namespace, ex. `linucraft:start`).
 - **Versions des modules** : si le pack refuse de charger, ajuste les versions de
   `@minecraft/server` / `@minecraft/server-ui` dans
@@ -84,12 +84,12 @@ Commands* sont stables). Il faut **Minecraft ~1.21.90+**.
 linucraft_BP/
   manifest.json
   scripts/
-    main.js       # enregistre /lincraft:start + alias chat
+    main.js       # enregistre /linucraft:start + alias chat
     terminal.js   # écran de boot (ActionForm) + boucle terminal (ModalForm)
     shell.js      # session, prompt, parsing, redirection, dispatch
     commands.js   # implémentations des commandes
     fs.js         # FS virtuel + persistance (dynamic properties)
 linucraft_RP/
   manifest.json
-  textures/ui/lincraft_logo.png
+  textures/ui/linucraft_logo.png
 ```

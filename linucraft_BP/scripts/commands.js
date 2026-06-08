@@ -1,12 +1,12 @@
 import { joinPath } from "./fs.js";
 
 // ---------------------------------------------------------------------------
-// Commandes de lincraft v1.
+// Commandes de linucraft v1.
 // Chaque commande : (session, args, fs) => string (texte de sortie).
 // Elle peut muter le FS (fs.*) et la session (session.cwd, session.scrollback).
 // ---------------------------------------------------------------------------
 
-const VERSION = "lincraft 1.0";
+const VERSION = "linucraft 1.0";
 
 // Formate une erreur façon shell, en tolérant les messages courts ("File
 // exists") comme longs ("cannot create directory: ...").
@@ -48,8 +48,8 @@ export const commands = {
 
   uname(session, args) {
     const { flags } = parseFlags(args);
-    if (flags.has("a")) return "lincraft localhost 1.0 Minecraft Bedrock JS x86_64 lincraft";
-    return "lincraft";
+    if (flags.has("a")) return "linucraft localhost 1.0 Minecraft Bedrock JS x86_64 linucraft";
+    return "linucraft";
   },
 
   date() {
@@ -139,7 +139,7 @@ export const commands = {
 
   neofetch(session, args, fs) {
     const info = [
-      `${session.user}@lincraft`,
+      `${session.user}@linucraft`,
       "-----------------",
       `OS: ${VERSION} (Bedrock)`,
       "Kernel: minecraft-js",

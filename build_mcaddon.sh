@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Empaquette linucraft_BP + linucraft_RP dans lincraft.mcaddon (un .zip renommé).
+# Empaquette linucraft_BP + linucraft_RP dans linucraft.mcaddon (un .zip renommé).
 set -euo pipefail
 cd "$(dirname "$0")"
 
-OUT="lincraft.mcaddon"
+OUT="linucraft.mcaddon"
 rm -f "$OUT"
 
 if ! command -v zip >/dev/null 2>&1; then
