@@ -31,16 +31,23 @@ export function openLincraft(player) {
   boot.show(player).then((res) => {
     if (res.canceled) return;
     system.run(() => openTerminal(session, fs));
-  });
+  }).catch((e) => player.sendMessage(`§clinucraft: ${e}`));
 }
 
 /** Boucle du terminal : affiche l'historique, lit une commande, recommence. */
 function openTerminal(session, fs) {
-  const form = new ModalFormData()
-    .title("linucraft — terminal")
-    .label(renderScrollback(session))
-    .textField("", "tape une commande… (ex: ls, help, cat /etc/motd)")
-    .toggle("Quitter le terminal", false);
+  let form;
+  try {
+    form = new ModalFormData()
+      .title("linucraft — terminal")
+      // Scrollback dans le label du champ : évite ModalFormData.label() (fragile selon version).
+      .textField(renderScrollback(session), "tape une commande… (ex: ls, help, cat /etc/motd)")
+      // Signature @minecraft/server-ui 2.x : objet d'options, pas un booléen.
+      .toggle("Quitter le terminal", { defaultValue: false });
+  } catch (e) {
+    session.player.sendMessage(`§clinucraft: impossible d'ouvrir le terminal: ${e}`);
+    return;
+  }
 
   form.show(session.player).then((res) => {
     // Le joueur était occupé (chat/menu ouvert) : on réessaie au tick suivant.
@@ -59,5 +66,7 @@ function openTerminal(session, fs) {
 
     runLine(session, line ?? "", fs);
     system.run(() => openTerminal(session, fs));
+  }).catch((e) => {
+    session.player.sendMessage(`§clinucraft: erreur terminal: ${e}`);
   });
 }

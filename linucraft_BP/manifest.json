@@ -4,7 +4,7 @@
     "name": "linucraft (Behavior,v1.0.0)",
     "description": "linucraft (v1.0.0) — un terminal Linux simulé dans Minecraft. /linucraft:start, par Elmart38",
     "uuid": "d3ed7aa6-939e-4c77-9d7b-efe4b65acfbd",
-    "version": [1, 0, 0],
+    "version": [1, 0, 1],
     "min_engine_version": [1, 21, 90]
   },
   "modules": [
@@ -12,7 +12,7 @@
       "type": "script",
       "language": "javascript",
       "uuid": "1e5d875c-b1a2-455a-bbb2-fa2247a18535",
-      "version": [1, 0, 0],
+      "version": [1, 0, 1],
       "entry": "scripts/main.js"
     }
   ],
