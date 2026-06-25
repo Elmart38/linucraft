@@ -1,0 +1,33 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "linucraft (Behavior,v{{VERSION_STR}})",
+    "description": "linucraft (v{{VERSION_STR}}) — un terminal Linux simulé dans Minecraft. /linucraft:start, par Elmart38",
+    "uuid": "d3ed7aa6-939e-4c77-9d7b-efe4b65acfbd",
+    "version": [{{VERSION_ARRAY}}],
+    "min_engine_version": [1, 21, 90]
+  },
+  "modules": [
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "1e5d875c-b1a2-455a-bbb2-fa2247a18535",
+      "version": [{{VERSION_ARRAY}}],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": "2.1.0"
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": "2.1.0"
+    },
+    {
+      "uuid": "f8e967d8-120b-4ded-9f52-2853928592d7",
+      "version": [{{VERSION_ARRAY}}]
+    }
+  ]
+}
