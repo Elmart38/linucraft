@@ -5,7 +5,7 @@ import { commands } from "./commands.js";
 // Le shell : crée la session, formate le prompt, parse et exécute une ligne.
 // ---------------------------------------------------------------------------
 
-const MAX_SCROLLBACK = 200; // lignes mémorisées (on affiche les ~50 dernières)
+const MAX_SCROLLBACK = 200; // lignes mémorisées (on affiche les ~80 dernières)
 
 export function createSession(player, fs) {
   const session = {
@@ -14,6 +14,7 @@ export function createSession(player, fs) {
     cwd: fs.homeSegments.slice(),
     history: [],
     scrollback: [],
+    quit: false,
   };
   // MOTD au démarrage.
   const motd = fs.getNode(["etc", "motd"]);
@@ -35,7 +36,7 @@ export function displayCwd(session, fs) {
 }
 
 export function prompt(session, fs) {
-  return `${session.user}@linucraft:${displayCwd(session, fs)}$ `;
+  return `§a${session.user}@linucraft§r:§9${displayCwd(session, fs)}§r$ `;
 }
 
 // Tokenise une ligne (gestion minimale des guillemets " et ').
@@ -82,12 +83,12 @@ export function runLine(session, line, fs) {
     const fn = cmd ? commands[cmd] : null;
 
     let output;
-    if (!fn) output = `lsh: ${cmd}: command not found`;
+    if (!fn) output = `§clsh: ${cmd}: command not found§r`;
     else {
       try {
         output = fn(session, args, fs) ?? "";
       } catch (e) {
-        output = `lsh: ${cmd}: ${e}`;
+        output = `§clsh: ${cmd}: ${e}§r`;
       }
     }
 

@@ -10,12 +10,13 @@ import { createSession, runLine } from "./shell.js";
 // ---------------------------------------------------------------------------
 
 const LOGO = "textures/ui/linucraft_logo.png";
-const VISIBLE_LINES = 50;
+const VISIBLE_LINES = 80;
+const MIN_LINES = 22; // padding pour garder la fenêtre haute même quand l'historique est court
 
 function renderScrollback(session) {
   const lines = session.scrollback.slice(-VISIBLE_LINES);
-  const text = lines.join("\n");
-  return text.length ? text : " ";
+  while (lines.length < MIN_LINES) lines.unshift("");
+  return lines.join("\n");
 }
 
 /** Point d'entrée : ouvre l'écran de boot pour un joueur. */
@@ -40,10 +41,7 @@ function openTerminal(session, fs) {
   try {
     form = new ModalFormData()
       .title("linucraft — terminal")
-      // Scrollback dans le label du champ : évite ModalFormData.label() (fragile selon version).
-      .textField(renderScrollback(session), "tape une commande… (ex: ls, help, cat /etc/motd)")
-      // Signature @minecraft/server-ui 2.x : objet d'options, pas un booléen.
-      .toggle("Quitter le terminal", { defaultValue: false });
+      .textField(renderScrollback(session), 'tape une commande… (ex: ls, help, exit)');
   } catch (e) {
     session.player.sendMessage(`§clinucraft: impossible d'ouvrir le terminal: ${e}`);
     return;
@@ -58,13 +56,12 @@ function openTerminal(session, fs) {
       return;
     }
 
-    const [line, quit] = res.formValues;
-    if (quit) {
+    const [line] = res.formValues;
+    runLine(session, line ?? "", fs);
+    if (session.quit) {
       fs.save();
       return;
     }
-
-    runLine(session, line ?? "", fs);
     system.run(() => openTerminal(session, fs));
   }).catch((e) => {
     session.player.sendMessage(`§clinucraft: erreur terminal: ${e}`);

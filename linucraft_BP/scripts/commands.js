@@ -34,8 +34,18 @@ export const commands = {
     return (
       "Commandes disponibles :\n  " +
       names.join("  ") +
-      "\n\nExemples : ls -a   cd /etc   cat motd   echo salut > note.txt   neofetch"
+      "\n\nExemples : ls -a   cd /etc   cat motd   echo salut > note.txt   neofetch\nTape §aexit§r pour quitter le terminal."
     );
+  },
+
+  exit(session) {
+    session.quit = true;
+    return "Au revoir !";
+  },
+
+  quit(session) {
+    session.quit = true;
+    return "Au revoir !";
   },
 
   pwd(session) {
