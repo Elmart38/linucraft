@@ -1,4 +1,4 @@
-import { joinPath } from "./vfs.js";
+import { joinPath, modeOf, uidOf, gidOf } from "./vfs.js";
 import { E, errnoFromVfs } from "./errno.js";
 import {
   createFileBackend,
@@ -42,10 +42,14 @@ export function createKernel({ vfs, tty, programs }) {
     // Démarre le processus initial (ex. /bin/sh) attaché au TTY.
     start(path, argv = [], { cwd } = {}) {
       const ttyOfd = { backend: tty };
+      const uid = vfs.USER_UID ?? 1000;
       return _create(path, argv, {
         ppid: 0,
+        uid,
+        gid: uid,
+        user: vfs.user,
         cwd: cwd ? cwd.slice() : vfs.homeSegments.slice(),
-        env: { HOME: joinPath(vfs.homeSegments), USER: vfs.user, PATH: "/bin", PWD: "" },
+        env: { HOME: joinPath(vfs.homeSegments), USER: vfs.user, UID: String(uid), PATH: "/bin", PWD: "" },
         fds: [ttyOfd, ttyOfd, ttyOfd],
       });
     },
@@ -78,7 +82,7 @@ export function createKernel({ vfs, tty, programs }) {
   };
 
   // --- Création d'un processus ---------------------------------------------
-  function _create(path, argv, { ppid, cwd, env, fds }) {
+  function _create(path, argv, { ppid, cwd, env, fds, uid = 1000, gid = 1000, user = "user" }) {
     const fn = programs[basename(path)];
     const proc = {
       pid: nextPid++,
@@ -88,6 +92,9 @@ export function createKernel({ vfs, tty, programs }) {
       cwd,
       env,
       fds, // tableau d'OFD (index = fd local)
+      uid,
+      gid,
+      user,
       state: "ready",
       gen: null,
       resumeVal: undefined,
@@ -168,6 +175,19 @@ export function createKernel({ vfs, tty, programs }) {
     return proc.fds.length - 1;
   }
 
+  // Le processus a-t-il le droit `need` ('r'|'w'|'x') sur ce noeud ?
+  // root (uid 0) passe partout. Modèle rwx propriétaire/groupe/autres.
+  function permit(proc, node, need) {
+    if (proc.uid === 0) return true;
+    const mode = modeOf(node);
+    let bits;
+    if (uidOf(node) === proc.uid) bits = (mode >> 6) & 7;
+    else if (gidOf(node) === proc.gid) bits = (mode >> 3) & 7;
+    else bits = mode & 7;
+    const want = need === "r" ? 4 : need === "w" ? 2 : 1;
+    return (bits & want) === want;
+  }
+
   // --- Dispatch des appels système -----------------------------------------
   // Renvoie { value } (résolu), { block:true } (bloque), ou { exit:code }.
   function dispatch(proc, sc) {
@@ -180,10 +200,10 @@ export function createKernel({ vfs, tty, programs }) {
 
       case "chdir": {
         const segs = vfs.resolve(proc.cwd, sc.path);
-        if (!vfs.isDir(segs)) {
-          const n = vfs.getNode(segs);
-          return { value: n ? E.NOTDIR : E.NOENT };
-        }
+        const node = vfs.getNode(segs);
+        if (!node) return { value: E.NOENT };
+        if (node.t !== "d") return { value: E.NOTDIR };
+        if (!permit(proc, node, "x")) return { value: E.ACCES };
         proc.cwd = segs;
         proc.env.PWD = joinPath(segs);
         return { value: 0 };
@@ -259,17 +279,28 @@ export function createKernel({ vfs, tty, programs }) {
         const abs = joinPath(segs);
         if (abs === "/proc")
           return { value: kernel.snapshot().map((p) => String(p.pid)).concat(["uptime"]) };
-        const list = vfs.readdir(segs);
-        return { value: list === null ? E.NOTDIR : list };
+        const node = vfs.getNode(segs);
+        if (!node) return { value: E.NOENT };
+        if (node.t !== "d") return { value: E.NOTDIR };
+        if (!permit(proc, node, "r")) return { value: E.ACCES };
+        return { value: Object.keys(node.c).sort() };
       }
 
       case "mkdir": {
-        const r = vfs.createDir(vfs.resolve(proc.cwd, sc.path));
+        const segs = vfs.resolve(proc.cwd, sc.path);
+        const parent = vfs.getNode(segs.slice(0, -1));
+        if (!parent || parent.t !== "d") return { value: E.NOENT };
+        if (!permit(proc, parent, "w")) return { value: E.ACCES };
+        const r = vfs.createDir(segs, { u: proc.uid, g: proc.gid, mt: ticks });
         return { value: r.err ? errnoFromVfs(r.err) : 0 };
       }
 
       case "unlink": {
-        const r = vfs.remove(vfs.resolve(proc.cwd, sc.path), sc.recursive);
+        const segs = vfs.resolve(proc.cwd, sc.path);
+        const parent = vfs.getNode(segs.slice(0, -1));
+        if (!parent || parent.t !== "d") return { value: E.NOENT };
+        if (!permit(proc, parent, "w")) return { value: E.ACCES };
+        const r = vfs.remove(segs, sc.recursive);
         return { value: r.err ? errnoFromVfs(r.err) : 0 };
       }
 
@@ -277,12 +308,21 @@ export function createKernel({ vfs, tty, programs }) {
         const childFds = (sc.opts.fds || [0, 1, 2]).map((i) => proc.fds[i] ?? null);
         // Chaque fd hérité est une référence de plus sur l'OFD (refcount tubes).
         for (const ofd of childFds) if (ofd && ofd.backend.ref) ofd.backend.ref(ofd);
+        // sudo : un processus peut être lancé sous une autre identité (jeu solo).
+        const uid = sc.opts.uid != null ? sc.opts.uid : proc.uid;
+        const gid = sc.opts.gid != null ? sc.opts.gid : proc.gid;
+        const user = sc.opts.user != null ? sc.opts.user : uid === 0 ? "root" : proc.user;
+        const env = { ...proc.env, UID: String(uid) };
+        if (uid === 0) env.USER = "root";
         return {
           value: _create(sc.path, sc.argv, {
             ppid: proc.pid,
             cwd: proc.cwd.slice(),
-            env: { ...proc.env },
+            env,
             fds: childFds,
+            uid,
+            gid,
+            user,
           }),
         };
       }
@@ -327,6 +367,61 @@ export function createKernel({ vfs, tty, programs }) {
       case "ps":
         return { value: kernel.snapshot() };
 
+      case "hasProgram":
+        return { value: !!programs[basename(sc.name)] };
+
+      case "usage":
+        return { value: vfs.usage() };
+
+      case "getuid":
+        return { value: proc.uid };
+      case "getgid":
+        return { value: proc.gid };
+
+      case "setuid": {
+        // Jeu solo : su/sudo sont autorisés sans mot de passe.
+        proc.uid = sc.uid | 0;
+        proc.gid = sc.uid | 0;
+        if (sc.user) proc.user = sc.user;
+        else proc.user = sc.uid === 0 ? "root" : proc.user;
+        proc.env.UID = String(proc.uid);
+        proc.env.USER = proc.user;
+        return { value: 0 };
+      }
+
+      case "lstat": {
+        const abs = joinPath(vfs.resolve(proc.cwd, sc.path));
+        if (abs.startsWith("/dev/") || abs.startsWith("/proc"))
+          return { value: { type: "f", size: 0, mode: 0o644, uid: 0, gid: 0, mtime: 0 } };
+        return { value: vfs.lstat(vfs.resolve(proc.cwd, sc.path)) };
+      }
+
+      case "chmod": {
+        const segs = vfs.resolve(proc.cwd, sc.path);
+        const node = vfs.getNode(segs, false);
+        if (!node) return { value: E.NOENT };
+        if (proc.uid !== 0 && proc.uid !== uidOf(node)) return { value: E.PERM };
+        vfs.setMeta(segs, { mode: sc.mode & 0o777 });
+        return { value: 0 };
+      }
+
+      case "chown": {
+        if (proc.uid !== 0) return { value: E.PERM }; // seul root change de propriétaire
+        const segs = vfs.resolve(proc.cwd, sc.path);
+        if (!vfs.getNode(segs, false)) return { value: E.NOENT };
+        vfs.setMeta(segs, { uid: sc.uid, gid: sc.gid != null ? sc.gid : sc.uid });
+        return { value: 0 };
+      }
+
+      case "symlink": {
+        const segs = vfs.resolve(proc.cwd, sc.path);
+        const parent = vfs.getNode(segs.slice(0, -1));
+        if (!parent || parent.t !== "d") return { value: E.NOENT };
+        if (!permit(proc, parent, "w")) return { value: E.ACCES };
+        const r = vfs.symlink(segs, sc.target, { u: proc.uid, g: proc.gid, mt: ticks });
+        return { value: r.err ? errnoFromVfs(r.err) : 0 };
+      }
+
       default:
         return { value: E.INVAL };
     }
@@ -363,6 +458,7 @@ export function createKernel({ vfs, tty, programs }) {
       const node = vfs.getNode(segs);
       if (!node) return E.NOENT;
       if (node.t === "d") return E.ISDIR;
+      if (!permit(proc, node, "r")) return E.ACCES;
       const fd = allocFd(proc);
       proc.fds[fd] = { backend: fileBackend, mode: "r", segments: segs, buf: node.d, pos: 0 };
       return fd;
@@ -372,10 +468,15 @@ export function createKernel({ vfs, tty, programs }) {
       const parent = vfs.getNode(segs.slice(0, -1));
       if (!parent) return E.NOENT;
       if (parent.t !== "d") return E.NOTDIR;
-      const existing = parent.c[segs[segs.length - 1]];
+      const existing = vfs.getNode(segs);
       if (existing && existing.t === "d") return E.ISDIR;
+      if (existing) { if (!permit(proc, existing, "w")) return E.ACCES; }
+      else if (!permit(proc, parent, "w")) return E.ACCES;
       const fd = allocFd(proc);
-      proc.fds[fd] = { backend: fileBackend, mode, segments: segs, wbuf: "" };
+      proc.fds[fd] = {
+        backend: fileBackend, mode, segments: segs, wbuf: "",
+        meta: { u: proc.uid, g: proc.gid, mt: ticks },
+      };
       return fd;
     }
     return E.INVAL;

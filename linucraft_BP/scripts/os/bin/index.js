@@ -6,9 +6,17 @@
 
 import { sh } from "./sh.js";
 import * as cu from "./coreutils.js";
+import * as fu from "./fsutils.js";
 
 export const programs = {
   sh,
+  chmod: fu.chmod,
+  chown: fu.chown,
+  stat: fu.stat,
+  ln: fu.ln,
+  df: fu.df,
+  du: fu.du,
+  id: fu.id,
   echo: cu.echo,
   cat: cu.cat,
   ls: cu.ls,
@@ -37,4 +45,6 @@ export const programs = {
 };
 
 // Noms à exposer dans /bin (inclut les built-ins du shell pour la complétion/aide).
-export const programNames = Object.keys(programs).concat(["cd", "exit", "export", "unset", "history"]);
+export const programNames = Object.keys(programs).concat(
+  ["cd", "exit", "export", "unset", "history", "test", "source", "sudo", "su", "jobs", "wait"]
+);

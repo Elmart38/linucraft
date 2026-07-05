@@ -37,6 +37,17 @@ export const SYS = {
   setenv: (name, value) => ({ sys: "setenv", name, value }),
   environ: () => ({ sys: "environ" }),
 
+  // --- identité & permissions ---
+  getuid: () => ({ sys: "getuid" }),
+  getgid: () => ({ sys: "getgid" }),
+  setuid: (uid, user) => ({ sys: "setuid", uid, user }),
+  chmod: (path, mode) => ({ sys: "chmod", path, mode }),
+  chown: (path, uid, gid) => ({ sys: "chown", path, uid, gid }),
+  symlink: (target, path) => ({ sys: "symlink", target, path }),
+  lstat: (path) => ({ sys: "lstat", path }),
+
   // --- divers ---
   ps: () => ({ sys: "ps" }), // liste des processus (pour /bin/ps et /proc)
+  hasProgram: (name) => ({ sys: "hasProgram", name }), // un binaire /bin/<name> existe-t-il ?
+  usage: () => ({ sys: "usage" }), // occupation du FS (pour df)
 };

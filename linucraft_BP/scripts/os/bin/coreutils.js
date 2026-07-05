@@ -1,3 +1,5 @@
+import { modeStr } from "./fsutils.js";
+
 // ---------------------------------------------------------------------------
 // Programmes système de base (« coreutils »). Chacun est un générateur
 // `function* main(ctx)` qui renvoie un code de sortie. Ils ne parlent au monde
@@ -60,30 +62,52 @@ export function* cat(ctx) {
   return code;
 }
 
+function* lsLong(ctx, name, s) {
+  const arrow = s.type === "l" ? ` -> ${s.target}` : "";
+  yield ctx.sys.write(1,
+    `${modeStr(s.type, s.mode)} ${String(s.uid).padStart(4)} ${String(s.gid).padStart(4)} ` +
+    `${String(s.size).padStart(6)} ${name}${arrow}\n`);
+}
+
 export function* ls(ctx) {
   const { flags, ops } = parseFlags(ctx.argv.slice(1));
   const target = ops[0] ?? ".";
-  const st = yield ctx.sys.stat(target);
+  const long = flags.has("l");
+  const st = yield ctx.sys.stat(target); // suit les symlinks pour détecter un dossier
   if (!st) {
     yield ctx.sys.write(2, `ls: cannot access '${target}': No such file or directory\n`);
     return 1;
   }
-  if (st.type === "f") {
-    yield ctx.sys.write(1, ctx.path.basename(target) + "\n");
+  // Cible fichier ou symlink : une seule entrée.
+  if (st.type !== "d") {
+    const l = yield ctx.sys.lstat(target);
+    const name = ctx.path.basename(target);
+    if (long) yield* lsLong(ctx, name, l);
+    else yield ctx.sys.write(1, name + (l && l.type === "l" ? "@" : "") + "\n");
     return 0;
   }
+
   let names = yield ctx.sys.readdir(target);
   if (typeof names === "number") {
     yield ctx.sys.write(2, `ls: ${target}: ${ctx.strerror(names)}\n`);
     return 1;
   }
   if (!flags.has("a")) names = names.filter((n) => !n.startsWith("."));
+
+  if (long) {
+    for (const n of names) {
+      const s = yield ctx.sys.lstat(target === "." ? n : ctx.path.join(target, n));
+      if (s) yield* lsLong(ctx, n, s);
+    }
+    return 0;
+  }
+
   const labeled = [];
   for (const n of names) {
-    const s = yield ctx.sys.stat(target === "." ? n : ctx.path.join(target, n));
-    labeled.push(s && s.type === "d" ? n + "/" : n);
+    const s = yield ctx.sys.lstat(target === "." ? n : ctx.path.join(target, n));
+    labeled.push(s && s.type === "d" ? n + "/" : s && s.type === "l" ? n + "@" : n);
   }
-  if (labeled.length) yield ctx.sys.write(1, labeled.join(flags.has("l") ? "\n" : "  ") + "\n");
+  if (labeled.length) yield ctx.sys.write(1, labeled.join("  ") + "\n");
   return 0;
 }
 

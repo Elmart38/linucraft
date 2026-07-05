@@ -95,7 +95,7 @@ export function createFileBackend(vfs) {
       ofd.refs = (ofd.refs || 1) - 1;
       if (ofd.refs > 0) return;
       if (ofd.mode === "w" || ofd.mode === "a") {
-        vfs.writeFile(ofd.segments, ofd.wbuf, ofd.mode === "a");
+        vfs.writeFile(ofd.segments, ofd.wbuf, ofd.mode === "a", ofd.meta);
       }
     },
   };
