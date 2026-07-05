@@ -410,12 +410,12 @@ export function* neofetch(ctx) {
   ];
   const logo = [
     "_         ",
-    "\\        ",
-    " \\       ",
-    "  \\      ",
-    "  // §2█████§r",
-    " //  §4█████§r",
-    "//   §4█████§r",
+    "\\\\        ",
+    " \\\\       ",
+    "  \\\\      ",
+    "  // §2████§r",
+    " //  §4████§r",
+    "//   §4████§r",
     "‾            ",
   ];
   const n = Math.max(logo.length, info.length);

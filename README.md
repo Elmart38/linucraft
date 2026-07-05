@@ -14,6 +14,9 @@ tes propres programmes, directement en jeu. Le tout persisté dans le monde.
 > *dynamic properties* du monde. Ce n'est pas Linux — mais ce n'est plus une
 > simulation non plus : c'est un vrai OS, écrit pour cette plateforme.
 
+## Développement
+Ce projet a été principalement codé en Vibe coding.
+
 ## Lancer le terminal
 
 - Commande : **`/linucraft:start`** (l'API Bedrock impose un namespace).
