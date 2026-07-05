@@ -7,6 +7,7 @@
 export const E = {
   PERM: -1, // EPERM   opération non permise
   NOENT: -2, // ENOENT  fichier ou dossier introuvable
+  SRCH: -3, // ESRCH   processus introuvable
   BADF: -9, // EBADF   mauvais descripteur de fichier
   NOMEM: -12, // ENOMEM  plus de mémoire
   ACCES: -13, // EACCES  permission refusée
@@ -22,6 +23,7 @@ export const E = {
 const MSG = {
   [E.PERM]: "Operation not permitted",
   [E.NOENT]: "No such file or directory",
+  [E.SRCH]: "No such process",
   [E.BADF]: "Bad file descriptor",
   [E.NOMEM]: "Cannot allocate memory",
   [E.ACCES]: "Permission denied",

@@ -357,6 +357,23 @@ export function* ps(ctx) {
   return 0;
 }
 
+export function* kill(ctx) {
+  const pids = ctx.argv.slice(1).filter((a) => /^\d+$/.test(a));
+  if (!pids.length) {
+    yield ctx.sys.write(2, "kill: usage: kill <pid…>\n");
+    return 1;
+  }
+  let code = 0;
+  for (const p of pids) {
+    const r = yield ctx.sys.kill(Number(p));
+    if (r < 0) {
+      yield ctx.sys.write(2, `kill: (${p}): ${ctx.strerror(r)}\n`);
+      code = 1;
+    }
+  }
+  return code;
+}
+
 export function* help(ctx) {
   const names = yield ctx.sys.readdir("/bin");
   const list = Array.isArray(names) ? names.slice().sort() : [];
@@ -364,8 +381,10 @@ export function* help(ctx) {
     1,
     "Commandes disponibles :\n  " +
       list.join("  ") +
-      "\n\nExemples : ls -a   cd /etc   cat motd   echo salut > note.txt\n" +
-      "          ls /bin | grep c | wc -l   ps   neofetch\n" +
+      "\n\nExemples : ls -la   cd /etc   echo salut > note.txt   ls /bin | grep c | wc -l\n" +
+      "Scripts  : if/for/while, $(...), globs *, &&/||, ./script.sh (chmod +x d'abord)\n" +
+      "JS       : §ajs hello.js§r   §a./hello.js§r   §anode§r (REPL)   require('./lib.js')\n" +
+      "Processus: ps   kill <pid>   commande &   jobs   wait   tape §c^C§r pour interrompre\n" +
       "Tape §aexit§r pour quitter le terminal.\n"
   );
   return 0;

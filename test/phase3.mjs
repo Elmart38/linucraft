@@ -88,7 +88,9 @@ const A = makeAsserter("linucraft — Phase 3 (shell)");
   sh(m, "echo 'echo bonjour $1' >> hello.sh");
   A.eq("source exécute un script", sh(m, "source hello.sh monde"), "bonjour monde");
   A.eq("sh fichier args", sh(m, "sh hello.sh Alice"), "bonjour Alice");
-  A.eq("./script via shebang", sh(m, "./hello.sh Bob"), "bonjour Bob");
+  A.has("./script sans +x refusé", sh(m, "./hello.sh Bob"), "Permission denied");
+  sh(m, "chmod +x hello.sh");
+  A.eq("./script via shebang (après chmod +x)", sh(m, "./hello.sh Bob"), "bonjour Bob");
 }
 
 // --- Arrière-plan & jobs ---------------------------------------------------

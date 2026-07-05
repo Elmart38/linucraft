@@ -20,6 +20,7 @@ import { makeCtx } from "./stdlib.js";
 // ---------------------------------------------------------------------------
 
 const MAX_STEPS_PER_TICK = 2000; // budget anti-watchdog (à calibrer en jeu)
+const MAX_MS_PER_TICK = 6; // garde temporel : un tick de jeu dure 50 ms
 
 function basename(p) {
   const segs = p.split("/").filter((s) => s.length > 0);
@@ -35,6 +36,7 @@ export function createKernel({ vfs, tty, programs }) {
   const kernel = {
     vfs,
     tty,
+    initPid: 0,
     get ticks() {
       return ticks;
     },
@@ -43,7 +45,7 @@ export function createKernel({ vfs, tty, programs }) {
     start(path, argv = [], { cwd } = {}) {
       const ttyOfd = { backend: tty };
       const uid = vfs.USER_UID ?? 1000;
-      return _create(path, argv, {
+      const pid = _create(path, argv, {
         ppid: 0,
         uid,
         gid: uid,
@@ -52,6 +54,22 @@ export function createKernel({ vfs, tty, programs }) {
         env: { HOME: joinPath(vfs.homeSegments), USER: vfs.user, UID: String(uid), PATH: "/bin", PWD: "" },
         fds: [ttyOfd, ttyOfd, ttyOfd],
       });
+      if (!kernel.initPid) kernel.initPid = pid;
+      return pid;
+    },
+
+    // ^C : tue le pipeline d'avant-plan (descendants non-`&` du shell de login).
+    interrupt() {
+      const doomed = [];
+      const walk = (ppid) => {
+        for (const p of procs.values())
+          if (p.ppid === ppid && !p.bg && p.state !== "zombie") {
+            doomed.push(p);
+            walk(p.pid);
+          }
+      };
+      walk(kernel.initPid);
+      for (const p of doomed) finish(p, 130); // 128 + SIGINT
     },
 
     // Reste-t-il des processus vivants ?
@@ -69,20 +87,24 @@ export function createKernel({ vfs, tty, programs }) {
       }));
     },
 
-    // Un battement de noyau : fait avancer les processus dans la limite du budget.
+    // Un battement de noyau : fait avancer les processus dans la limite du
+    // budget (pas ET temps réel — un `while(true)` interprété rend chaque pas
+    // coûteux, seul le temps protège vraiment du watchdog). Le budget de pas
+    // est partagé équitablement pour qu'une boucle n'affame pas les autres.
     tick() {
       ticks++;
-      const budget = { n: MAX_STEPS_PER_TICK };
-      for (const proc of [...procs.values()]) {
-        if (proc.state === "zombie") continue;
-        advance(proc, budget);
-        if (budget.n <= 0) break;
+      const t0 = Date.now();
+      const alive = [...procs.values()].filter((p) => p.state !== "zombie");
+      const share = Math.max(16, Math.ceil(MAX_STEPS_PER_TICK / Math.max(1, alive.length)));
+      for (const proc of alive) {
+        advance(proc, { n: share, t0 });
+        if (Date.now() - t0 > MAX_MS_PER_TICK) break;
       }
     },
   };
 
   // --- Création d'un processus ---------------------------------------------
-  function _create(path, argv, { ppid, cwd, env, fds, uid = 1000, gid = 1000, user = "user" }) {
+  function _create(path, argv, { ppid, cwd, env, fds, uid = 1000, gid = 1000, user = "user", bg = false }) {
     const fn = programs[basename(path)];
     const proc = {
       pid: nextPid++,
@@ -95,6 +117,7 @@ export function createKernel({ vfs, tty, programs }) {
       uid,
       gid,
       user,
+      bg, // lancé avec `&` : épargné par ^C
       state: "ready",
       gen: null,
       resumeVal: undefined,
@@ -118,6 +141,11 @@ export function createKernel({ vfs, tty, programs }) {
   function advance(proc, budget) {
     while (budget.n > 0) {
       budget.n--;
+      // Garde temporel (vérifié par paquets de 32 pas pour rester bon marché).
+      if ((budget.n & 31) === 0 && Date.now() - budget.t0 > MAX_MS_PER_TICK) {
+        budget.n = 0;
+        return;
+      }
 
       // 1) Si le processus était bloqué, on ré-essaie son syscall en attente.
       if (proc.pending) {
@@ -161,6 +189,10 @@ export function createKernel({ vfs, tty, programs }) {
     proc.state = "zombie";
     // Fermer tous les descripteurs (libère les tubes → EOF pour les lecteurs).
     for (const ofd of proc.fds) if (ofd && ofd.backend.close) ofd.backend.close(ofd);
+    proc.fds = [];
+    // Ses enfants deviennent orphelins ; un zombie sans parent est purgé direct.
+    for (const p of procs.values()) if (p.ppid === proc.pid) p.ppid = 0;
+    if (!procs.has(proc.ppid)) procs.delete(proc.pid);
   }
 
   // --- Écriture interne sur un fd (erreurs noyau, programme introuvable) ----
@@ -323,8 +355,17 @@ export function createKernel({ vfs, tty, programs }) {
             uid,
             gid,
             user,
+            bg: !!sc.opts.bg,
           }),
         };
+      }
+
+      case "kill": {
+        const target = procs.get(sc.pid | 0);
+        if (!target || target.state === "zombie") return { value: E.SRCH };
+        if (proc.uid !== 0 && proc.uid !== target.uid) return { value: E.PERM };
+        finish(target, 143); // 128 + SIGTERM
+        return { value: 0 };
       }
 
       case "wait": {
@@ -481,6 +522,9 @@ export function createKernel({ vfs, tty, programs }) {
     }
     return E.INVAL;
   }
+
+  // La discipline de ligne du TTY déclenche ^C ici.
+  tty.onInterrupt = () => kernel.interrupt();
 
   // Contenu généré de /proc (lecture seule).
   function procContent(abs) {

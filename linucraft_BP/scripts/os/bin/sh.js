@@ -455,6 +455,7 @@ function* evalPipeline(ctx, pipeline, state, background) {
   // Cas 2 : pipeline multi-étages (chaque étage = commande simple externe).
   const toClose = [];
   const pids = [];
+  const labels = [];
   let inFd = 0;
   let ok = true;
 
@@ -481,11 +482,24 @@ function* evalPipeline(ctx, pipeline, state, background) {
     }
     if (!ok) break;
     if (!built.argv.length) { inFd = nextIn; continue; }
-    const pid = yield* spawnResolved(ctx, built.argv, [curIn, curOut, 2], state);
-    if (pid > 0) pids.push(pid);
+    const pid = yield* spawnResolved(ctx, built.argv, [curIn, curOut, 2], state, background ? { bg: true } : {});
+    if (pid > 0) {
+      pids.push(pid);
+      labels.push(built.argv.join(" "));
+    }
     inFd = nextIn;
   }
   for (const fd of toClose) yield ctx.sys.close(fd);
+
+  if (background) {
+    // `a | b &` : le pipeline entier part en arrière-plan, on n'attend pas.
+    const last = pids[pids.length - 1];
+    if (last) {
+      state.jobs.push({ pid: last, cmd: labels.join(" | ") });
+      yield ctx.sys.write(1, `[${state.jobs.length}] ${last}\n`);
+    }
+    return 0;
+  }
 
   let code = 0;
   for (const pid of pids) { const c = yield ctx.sys.wait(pid); if (c >= 0) code = c; }
@@ -537,7 +551,7 @@ function* evalSimple(ctx, cmd, state, background) {
   }
   if (!ok) { for (const fd of toClose) yield ctx.sys.close(fd); return 1; }
 
-  const pid = yield* spawnResolved(ctx, built.argv, [inFd, outFd, 2], state);
+  const pid = yield* spawnResolved(ctx, built.argv, [inFd, outFd, 2], state, background ? { bg: true } : {});
   for (const fd of toClose) yield ctx.sys.close(fd);
   if (pid <= 0) return 127;
 
@@ -551,21 +565,41 @@ function* evalSimple(ctx, cmd, state, background) {
 }
 
 // Résout un nom de commande en /bin/<nom>, gère les scripts (#!) et spawn.
-// `extra` permet de forcer l'identité (sudo → uid 0).
+// `extra` permet de forcer l'identité (sudo → uid 0) ou le fond (bg).
 function* spawnResolved(ctx, argv, fds, state, extra = {}) {
   const name = argv[0];
   const progPath = name.includes("/") ? name : "/bin/" + name;
   const has = yield ctx.sys.hasProgram(name);
   if (!has) {
-    // Script ? (fichier avec shebang) -> exécuté par /bin/sh
+    // Script ? (fichier avec shebang) -> exécuté par son interpréteur.
     const st = yield ctx.sys.stat(progPath);
     if (st && st.type === "f") {
+      // Exécution directe (./x, /chemin/x) : le bit x est requis, comme sous Unix.
+      if (name.includes("/")) {
+        const uid = yield ctx.sys.getuid();
+        const gid = yield ctx.sys.getgid();
+        const xok =
+          uid === 0 ? (st.mode & 0o111) !== 0
+          : uid === st.uid ? ((st.mode >> 6) & 1) !== 0
+          : gid === st.gid ? ((st.mode >> 3) & 1) !== 0
+          : (st.mode & 1) !== 0;
+        if (!xok) {
+          yield ctx.sys.write(2, `lsh: ${name}: Permission denied\n`);
+          return -1;
+        }
+      }
       const fd = yield ctx.sys.open(progPath, "r");
       if (typeof fd !== "number" || fd >= 0) {
-        const first = yield ctx.sys.read(fd, 64);
+        const first = yield ctx.sys.read(fd, 80);
         yield ctx.sys.close(fd);
         if (typeof first === "string" && first.startsWith("#!")) {
-          return yield ctx.sys.spawn("/bin/sh", [progPath, ...argv.slice(1)], { fds, ...extra });
+          const interp = first.slice(2).split("\n")[0].trim().split(/\s+/)[0] || "/bin/sh";
+          const okInterp = yield ctx.sys.hasProgram(interp);
+          if (!okInterp) {
+            yield ctx.sys.write(2, `lsh: ${name}: bad interpreter: ${interp}\n`);
+            return -1;
+          }
+          return yield ctx.sys.spawn(interp, [progPath, ...argv.slice(1)], { fds, ...extra });
         }
       }
     }

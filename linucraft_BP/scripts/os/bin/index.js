@@ -5,11 +5,15 @@
 // ---------------------------------------------------------------------------
 
 import { sh } from "./sh.js";
+import { js } from "./js.js";
 import * as cu from "./coreutils.js";
 import * as fu from "./fsutils.js";
 
 export const programs = {
   sh,
+  js,
+  node: js, // alias familier pour le REPL et les scripts
+  kill: cu.kill,
   chmod: fu.chmod,
   chown: fu.chown,
   stat: fu.stat,

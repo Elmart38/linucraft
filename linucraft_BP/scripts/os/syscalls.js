@@ -27,6 +27,7 @@ export const SYS = {
   wait: (pid = -1) => ({ sys: "wait", pid }),
   exit: (code = 0) => ({ sys: "exit", code }),
   getpid: () => ({ sys: "getpid" }),
+  kill: (pid) => ({ sys: "kill", pid }),
   sleep: (ticks) => ({ sys: "sleep", ticks }),
   yield: () => ({ sys: "yield" }),
 

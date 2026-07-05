@@ -57,6 +57,15 @@ export function createTTY() {
 
     // --- API plateforme ---
     pushInput(s) {
+      // Discipline de ligne : taper ^C interrompt le processus d'avant-plan
+      // (le noyau branche onInterrupt) au lieu d'être bufferisé.
+      if (s.trim() === "^C") {
+        tty.lines.push(tty.cur + "^C");
+        tty.cur = "";
+        tty._asked = false;
+        if (tty.onInterrupt) tty.onInterrupt();
+        return;
+      }
       tty.inputBuf += s;
       tty._asked = false;
     },
