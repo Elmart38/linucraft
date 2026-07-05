@@ -371,6 +371,13 @@ export function* help(ctx) {
   return 0;
 }
 
+function visibleLength(s) {
+  return s.replace(/§./g, "").length;
+}
+function padVisible(s, width) {
+  return s + " ".repeat(Math.max(0, width - visibleLength(s)));
+}
+
 export function* neofetch(ctx) {
   const user = (yield ctx.sys.getenv("USER")) || "user";
   const info = [
@@ -383,17 +390,18 @@ export function* neofetch(ctx) {
     "CPU: Redstone Core",
   ];
   const logo = [
-    "   .--.   ",
-    "  |o_o |  ",
-    "  |:_/ |  ",
-    " //   \\ \\ ",
-    "(|     | )",
-    "/'\\_   _/`\\",
-    "\\___)=(___/",
+    "_         ",
+    "\\        ",
+    " \\       ",
+    "  \\      ",
+    "  // §2█████§r",
+    " //  §4█████§r",
+    "//   §4█████§r",
+    "‾            ",
   ];
   const n = Math.max(logo.length, info.length);
   for (let i = 0; i < n; i++)
-    yield ctx.sys.write(1, (logo[i] ?? "").padEnd(12) + (info[i] ?? "") + "\n");
+    yield ctx.sys.write(1, padVisible(logo[i] ?? "", 12) + (info[i] ?? "") + "\n");
   return 0;
 }
 
