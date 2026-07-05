@@ -16,7 +16,7 @@ tes propres programmes, directement en jeu. Le tout persisté dans le monde.
 
 ## Installation et démarrage rapide
 
-1. Télécharge le fichier .mcaddon
+1. Télécharge le fichier [.mcaddon](https://github.com/Elmart38/linucraft/releases)
 2. Double-clique sur le `.mcaddon` (côté Windows) : Minecraft importe les packs.
 3. Commande : **`/linucraft:start`**
 
