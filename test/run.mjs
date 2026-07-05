@@ -124,6 +124,19 @@ function machine_screen(m) {
 {
   const m = boot();
   has("commande inconnue", sh(m, "foobar"), "command not found");
+  eq("inconnue → $? = 127", sh(m, "echo $?"), "127");
+  sh(m, "foo");
+  sh(m, "bar");
+  eq("inconnues répétées n'empoisonnent pas le shell", sh(m, "echo ok"), "ok");
+  eq("inconnue dans un pipeline", sh(m, "foobar | wc -l"), "foobar: command not found\n0");
+}
+
+{
+  const m = boot();
+  sh(m, "export FOO=42");
+  sh(m, "unset FOO");
+  eq("unset supprime la variable", sh(m, "echo [$FOO]"), "[]");
+  eq("unset retire de env", sh(m, "env | grep FOO | wc -l"), "0");
 }
 
 {

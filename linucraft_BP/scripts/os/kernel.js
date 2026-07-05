@@ -97,10 +97,11 @@ export function createKernel({ vfs, tty, programs }) {
     };
     procs.set(proc.pid, proc);
     if (!fn) {
-      // Programme introuvable : on écrit l'erreur et on le marque mort tout de suite.
+      // Programme introuvable : le « processus » naît mort avec le code 127,
+      // comme sous Unix. spawn renvoie quand même son pid (wait → 127).
       writeFd(proc, 2, `${basename(path)}: command not found\n`);
       finish(proc, 127);
-      return -E.NOENT;
+      return proc.pid;
     }
     proc.gen = fn(makeCtx(proc));
     return proc.pid;
@@ -191,7 +192,8 @@ export function createKernel({ vfs, tty, programs }) {
       case "getenv":
         return { value: proc.env[sc.name] ?? null };
       case "setenv":
-        proc.env[sc.name] = sc.value;
+        if (sc.value === undefined || sc.value === null) delete proc.env[sc.name];
+        else proc.env[sc.name] = sc.value;
         return { value: 0 };
       case "environ":
         return { value: { ...proc.env } };
