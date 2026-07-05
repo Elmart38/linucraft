@@ -58,7 +58,7 @@ jamais le jeu, elle apparaît juste dans `ps` et se tue avec `kill`.
 
 ```sh
 ./hello.js               # un programme d'exemple est seedé dans ton home
-js hello.js Elwin        # ou via l'interpréteur explicitement
+js hello.js Elmart38        # ou via l'interpréteur explicitement
 node                     # REPL interactif (.exit pour sortir)
 ```
 
