@@ -14,6 +14,12 @@ tes propres programmes, directement en jeu. Le tout persisté dans le monde.
 > *dynamic properties* du monde. Ce n'est pas Linux — mais ce n'est plus une
 > simulation non plus : c'est un vrai OS, écrit pour cette plateforme.
 
+## Installation et démarrage rapide
+
+1. Télécharge le fichier .mcaddon
+2. Double-clique sur le `.mcaddon` (côté Windows) : Minecraft importe les packs.
+3. Commande : **`/linucraft:start`**
+
 ## Développement
 Ce projet a été principalement codé en Vibe coding.
 
