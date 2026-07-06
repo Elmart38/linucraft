@@ -690,13 +690,31 @@ function* runBuiltin(ctx, argv, state) {
       return line === null ? 1 : 0;
     }
     case "su": {
-      const who = argv[1] || "root";
-      const uid = who === "root" ? 0 : 1000;
-      yield ctx.sys.setuid(uid, who);
-      const home = uid === 0 ? "/root" : "/home/" + who;
-      const st = yield ctx.sys.stat(home);
-      if (st && st.type === "d") { yield ctx.sys.setenv("HOME", home); yield ctx.sys.chdir(home); }
-      return 0;
+      // su [-|-l|--login] [utilisateur] : lance un shell IMBRIQUÉ sous une
+      // autre identité. `exit` en ressort et revient au shell d'origine (comme
+      // le vrai su). Sans nom → root. `-`/`-l` → shell de login (cd dans le home).
+      let login = false;
+      const names = [];
+      for (const a of argv.slice(1)) {
+        if (a === "-" || a === "-l" || a === "--login") login = true;
+        else if (a === "--") continue;
+        else names.push(a);
+      }
+      const who = names[0] || "root";
+      const curUser = (yield ctx.sys.getenv("USER")) || "user";
+      let uid, gid, home;
+      if (who === "root") { uid = 0; gid = 0; home = "/root"; }
+      else if (who === curUser) {
+        uid = yield ctx.sys.getuid();
+        gid = yield ctx.sys.getgid();
+        home = "/home/" + who;
+      } else { yield ctx.sys.write(2, `su: l'utilisateur '${who}' n'existe pas\n`); return 1; }
+      const opts = { fds: [0, 1, 2], uid, gid, user: who, env: { USER: who, HOME: home } };
+      if (login) opts.cwd = home;
+      const pid = yield ctx.sys.spawn("/bin/sh", [], opts);
+      if (pid <= 0) return 127;
+      const code = yield ctx.sys.wait(pid);
+      return code < 0 ? 0 : code;
     }
     case "sudo": {
       if (!argv[1]) { yield ctx.sys.write(2, "usage: sudo <commande>\n"); return 1; }

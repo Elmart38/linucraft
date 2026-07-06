@@ -32,6 +32,7 @@ export function createKernel({ vfs, tty, programs }) {
   const procs = new Map();
   let nextPid = 1;
   let ticks = 0;
+  let rrCursor = 0; // rotation round-robin de l'ordre d'ordonnancement
 
   const kernel = {
     vfs,
@@ -95,11 +96,18 @@ export function createKernel({ vfs, tty, programs }) {
       ticks++;
       const t0 = Date.now();
       const alive = [...procs.values()].filter((p) => p.state !== "zombie");
-      const share = Math.max(16, Math.ceil(MAX_STEPS_PER_TICK / Math.max(1, alive.length)));
-      for (const proc of alive) {
+      if (alive.length === 0) return;
+      const share = Math.max(16, Math.ceil(MAX_STEPS_PER_TICK / alive.length));
+      // Rotation round-robin : on ne commence pas toujours par le même processus.
+      // Sinon le garde temporel (break sur MAX_MS_PER_TICK) couperait toujours la
+      // fin de la liste → un `while(true)` en tête affamerait l'avant-plan.
+      const start = rrCursor % alive.length;
+      for (let k = 0; k < alive.length; k++) {
+        const proc = alive[(start + k) % alive.length];
         advance(proc, { n: share, t0 });
         if (Date.now() - t0 > MAX_MS_PER_TICK) break;
       }
+      rrCursor = (rrCursor + 1) % alive.length;
     },
   };
 
@@ -346,10 +354,12 @@ export function createKernel({ vfs, tty, programs }) {
         const user = sc.opts.user != null ? sc.opts.user : uid === 0 ? "root" : proc.user;
         const env = { ...proc.env, UID: String(uid) };
         if (uid === 0) env.USER = "root";
+        if (sc.opts.env) Object.assign(env, sc.opts.env); // su/login : HOME, USER…
+        const cwd = sc.opts.cwd ? vfs.resolve(proc.cwd, sc.opts.cwd) : proc.cwd.slice();
         return {
           value: _create(sc.path, sc.argv, {
             ppid: proc.pid,
-            cwd: proc.cwd.slice(),
+            cwd,
             env,
             fds: childFds,
             uid,
@@ -365,6 +375,7 @@ export function createKernel({ vfs, tty, programs }) {
         if (!target || target.state === "zombie") return { value: E.SRCH };
         if (proc.uid !== 0 && proc.uid !== target.uid) return { value: E.PERM };
         finish(target, 143); // 128 + SIGTERM
+        procs.delete(target.pid); // retire vraiment le processus : aucun zombie ne traîne
         return { value: 0 };
       }
 

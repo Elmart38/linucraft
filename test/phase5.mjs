@@ -7,7 +7,8 @@ const A = makeAsserter("linucraft — Phase 5 (moteur JS)");
 // Écrit un programme JS exécutable dans le home (sans passer par le shell,
 // pour éviter les acrobaties d'échappement multi-lignes).
 function writeJs(m, name, src) {
-  m.vfs.writeFile(splitPath("/home/elwin/" + name), src, false, { m: 0o755, u: 1000, g: 1000 });
+  const u = m.vfs.USER_UID;
+  m.vfs.writeFile(splitPath("/home/elwin/" + name), src, false, { m: 0o755, u, g: u });
 }
 
 // --- Programme seedé ---------------------------------------------------------
@@ -206,8 +207,8 @@ function writeJs(m, name, src) {
   A.eq("le shell répond pendant la boucle (préemption)", sh(m, "echo vivant"), "vivant");
   A.has("ps montre la boucle", sh(m, "ps"), "loop.js");
   A.eq("kill termine la boucle", sh(m, `kill ${pid}`), "");
-  sh(m, "wait");
-  A.check("plus de loop.js dans ps", !sh(m, "ps").includes("loop.js"), "encore là");
+  A.check("plus de loop.js dans ps (pas de zombie qui traîne)", !sh(m, "ps").includes("loop.js"), "encore là");
+  A.has("re-kill d'un pid supprimé => No such process", sh(m, `kill ${pid}`), "No such process");
 }
 
 // --- ^C interrompt l'avant-plan -----------------------------------------------------

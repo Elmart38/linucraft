@@ -9,8 +9,8 @@ const A = makeAsserter("linucraft — Phase 4 (FS v2)");
   const m = boot();
   sh(m, "touch f");
   A.has("ls -l montre le mode", sh(m, "ls -l f"), "-rw-r--r--");
-  A.has("stat montre l'Uid", sh(m, "stat f"), "Uid: 1000");
-  A.has("id de l'utilisateur", sh(m, "id"), "uid=1000(elwin)");
+  A.has("stat montre l'Uid", sh(m, "stat f"), "Uid: " + m.vfs.USER_UID);
+  A.has("id de l'utilisateur", sh(m, "id"), `uid=${m.vfs.USER_UID}(elwin)`);
 }
 
 // --- chmod + permissions ---------------------------------------------------
@@ -40,12 +40,32 @@ const A = makeAsserter("linucraft — Phase 4 (FS v2)");
   A.has("sudo sh -c redirection root", (sh(m, "sudo sh -c 'echo hi > /etc/greet'"), sh(m, "cat /etc/greet")), "hi");
 }
 
-// --- su --------------------------------------------------------------------
+// --- su : shell imbriqué, exit revient au shell de base --------------------
 {
   const m = boot();
   A.has("su root change d'identité", (sh(m, "su root"), sh(m, "id")), "uid=0(root)");
   A.eq("whoami après su", sh(m, "whoami"), "root");
   A.eq("root écrit dans /etc", (sh(m, "echo ok > /etc/rootfile"), sh(m, "cat /etc/rootfile")), "ok");
+  A.eq("exit du su revient à l'utilisateur de base", (sh(m, "exit"), sh(m, "whoami")), "elwin");
+}
+{
+  // `su -` : login shell root, sans créer d'utilisateur nommé "-".
+  const m = boot();
+  A.has("su - donne bien root", (sh(m, "su -"), sh(m, "id")), "uid=0(root)");
+  A.eq("su - est un login shell dans /root", sh(m, "pwd"), "/root");
+  A.eq("exit revient à l'utilisateur", (sh(m, "exit"), sh(m, "whoami")), "elwin");
+  A.has("su vers un utilisateur inconnu échoue", sh(m, "su fantome"), "n'existe pas");
+}
+
+// --- uid distinct par utilisateur (plus tous à 1000) -----------------------
+{
+  const a = boot({ userId: "alice-id" });
+  const b = boot({ userId: "bob-id" });
+  A.check("uids distincts selon le joueur",
+    a.vfs.USER_UID !== b.vfs.USER_UID && a.vfs.USER_UID > 0 && b.vfs.USER_UID > 0,
+    `alice=${a.vfs.USER_UID} bob=${b.vfs.USER_UID}`);
+  A.check("uid stable pour un même joueur",
+    boot({ userId: "alice-id" }).vfs.USER_UID === a.vfs.USER_UID, "instable");
 }
 
 // --- Symlinks --------------------------------------------------------------

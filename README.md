@@ -100,8 +100,9 @@ process.exit(0);
   `/proc/uptime`, codes de sortie, zombies récoltés par `wait`.
 - **FS v2** : permissions `rwx` réelles (uid/gid, `chmod`, `chown`), symlinks
   (`ln -s`), `stat`, `df`, `du`, `/dev/null|zero|random`, `/tmp` en 777. Un
-  utilisateur normal ne peut pas écrire dans `/etc` — `sudo cmd` ou `su root`
-  pour l'administration (`id`, prompt `#`).
+  utilisateur normal ne peut pas écrire dans `/etc` — `sudo cmd` ou `su`/`su -`
+  (ouvre un shell root imbriqué, `exit` pour en ressortir ; `id`, prompt `#`).
+  Chaque joueur a un **uid distinct et stable** dérivé de son identifiant.
 - **Persistance chunkée** : le FS est découpé en morceaux sur plusieurs dynamic
   properties — la limite Bedrock de ~32 Ko **ne borne plus** la taille du
   système de fichiers.
