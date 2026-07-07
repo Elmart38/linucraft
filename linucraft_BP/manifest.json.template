@@ -5,7 +5,7 @@
     "description": "linucraft (v{{VERSION_STR}}) — un terminal Linux simulé dans Minecraft. /linucraft:start, par Elmart38",
     "uuid": "d3ed7aa6-939e-4c77-9d7b-efe4b65acfbd",
     "version": [{{VERSION_ARRAY}}],
-    "min_engine_version": [1, 21, 90]
+    "min_engine_version": [1, 21, 100]
   },
   "modules": [
     {
@@ -19,7 +19,7 @@
   "dependencies": [
     {
       "module_name": "@minecraft/server",
-      "version": "2.1.0"
+      "version": "2.2.0"
     },
     {
       "module_name": "@minecraft/server-ui",

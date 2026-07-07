@@ -384,6 +384,7 @@ export function* help(ctx) {
       "\n\nExemples : ls -la   cd /etc   echo salut > note.txt   ls /bin | grep c | wc -l\n" +
       "Scripts  : if/for/while, $(...), globs *, &&/||, ./script.sh (chmod +x d'abord)\n" +
       "JS       : §ajs hello.js§r   §a./hello.js§r   §anode§r (REPL)   require('./lib.js')\n" +
+      "Éditeur  : §anano <fichier>§r — édite dans un livre-plume (Enregistrer/Annuler)\n" +
       "Processus: ps   kill <pid>   commande &   jobs   wait   tape §c^C§r pour interrompre\n" +
       "Tape §aexit§r pour quitter le terminal.\n"
   );

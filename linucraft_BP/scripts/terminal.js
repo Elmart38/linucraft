@@ -1,4 +1,4 @@
-import { system, world } from "@minecraft/server";
+import { system, world, ItemStack, ItemLockMode } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { createMachine } from "./os/machine.js";
 
@@ -22,6 +22,7 @@ const LOGO = "textures/ui/linucraft_logo.png";
 const VISIBLE_LINES = 80;
 const MIN_LINES = 22;
 const BOOT_RETRIES = 20; // ouvert depuis le chat, l'écran de chat met 1-2 ticks à se fermer
+const NANO_MARK = "§lnano§r — "; // préfixe du nameTag des livres conjurés par nano
 
 const storage = {
   get: (k) => world.getDynamicProperty(k),
@@ -118,6 +119,11 @@ function enterTerminal(player) {
   sessions.set(player.id, session);
   // Quand le shell attend une saisie, on (r)ouvre le formulaire.
   machine.tty.wantInput = () => scheduleOpen(session);
+  // Requêtes des programmes vers la couche Minecraft (nano → livre-plume).
+  machine.kernel.onHostCall = (req) => handleHostCall(session, req);
+  // Machine neuve : aucun livre nano ne peut être légitime, on balaye les
+  // orphelins d'une session précédente (déconnexion pendant une édition).
+  sweepNanoBooks(player);
   ensureInterval();
   // Le shell va bloquer sur sa première lecture → wantInput ouvrira le terminal.
 }
@@ -135,6 +141,13 @@ function openTerminal(session) {
   if (session.formOpen) return;
   if (!sessions.has(session.player.id)) return; // machine éteinte entre-temps
   const { player, machine } = session;
+  // Une édition nano en cours a priorité : on ré-affiche son formulaire
+  // (Enregistrer/Annuler) au lieu de l'écran de saisie du terminal.
+  const hostReq = machine.kernel.hostCalls().find((r) => r.kind === "bookEdit");
+  if (hostReq) {
+    showNanoForm(session, hostReq);
+    return;
+  }
   let form;
   try {
     form = new ModalFormData()
@@ -165,4 +178,164 @@ function openTerminal(session) {
       session.formOpen = false;
       player.sendMessage(`§clinucraft: erreur terminal: ${e}`);
     });
+}
+
+// ---------------------------------------------------------------------------
+// nano — réalisation de l'appel hôte "bookEdit" (voir os/bin/nano.js).
+//
+// Le programme nano (pur) bloque sur `yield SYS.host("bookEdit", {path, pages})`.
+// Ici on conjure un livre-plume ÉPHÉMÈRE dans l'inventaire du joueur (contenu
+// = le fichier), on affiche un formulaire Enregistrer/Annuler, et on complète
+// l'appel avec { saved:true, pages } / { saved:false } / { error }. Le livre
+// est repris (retiré de l'inventaire) dans tous les cas : il n'existe que
+// pendant l'édition. Échap laisse l'appel pendant : retaper `linucraft`
+// ré-affiche le formulaire (branche dédiée dans openTerminal).
+// ---------------------------------------------------------------------------
+
+function handleHostCall(session, req) {
+  if (req.kind !== "bookEdit") {
+    session.machine.kernel.completeHostCall(req.id, { error: `appel hôte inconnu: ${req.kind}` });
+    return;
+  }
+  // Hors du tick noyau (même précaution que scheduleOpen).
+  system.run(() => startBookEdit(session, req));
+}
+
+function startBookEdit(session, req) {
+  const { player, machine } = session;
+  const fail = (msg) => machine.kernel.completeHostCall(req.id, { error: msg });
+  try {
+    if (!sessions.has(player.id)) return; // machine éteinte entre-temps
+    const container = player.getComponent("minecraft:inventory")?.container;
+    if (!container) {
+      fail("inventaire inaccessible");
+      return;
+    }
+    // Balaye les livres orphelins en épargnant ceux des éditions en cours.
+    sweepNanoBooks(player, keepTagsFor(machine, req.id));
+    if (container.emptySlotsCount === 0) {
+      fail("inventaire plein — libère un emplacement et relance nano");
+      return;
+    }
+    const book = new ItemStack("minecraft:writable_book", 1);
+    book.getComponent("minecraft:book").setContents(req.payload.pages);
+    book.nameTag = NANO_MARK + req.payload.path;
+    book.keepOnDeath = true;
+    book.lockMode = ItemLockMode.inventory; // ni jetable, ni déposable dans un coffre
+    container.addItem(book);
+    showNanoForm(session, req);
+  } catch (e) {
+    fail(`impossible de créer le livre: ${e}`);
+  }
+}
+
+function showNanoForm(session, req) {
+  if (session.formOpen) return;
+  if (!sessions.has(session.player.id)) return;
+  const { player, machine } = session;
+  // L'appel a pu mourir entre-temps (kill pendant l'édition) : ménage et stop.
+  if (!machine.kernel.hostCalls().some((r) => r.id === req.id)) {
+    sweepNanoBooks(player, keepTagsFor(machine));
+    return;
+  }
+  let form;
+  try {
+    form = new ActionFormData()
+      .title(`nano — ${req.payload.path}`)
+      .body(
+        "§7Un livre-plume est apparu dans ton inventaire.§r\n\n" +
+          "1. Ferme ce menu (Échap) et édite le livre.\n" +
+          "2. Ne le signe pas.\n" +
+          "3. Retape §alinucraft§r et choisis :\n\n" +
+          "§8(un saut de page = un saut de ligne)§r"
+      )
+      .button("Enregistrer")
+      .button("Annuler");
+  } catch (e) {
+    player.sendMessage(`§clinucraft: nano: ${e}`);
+    return;
+  }
+  session.formOpen = true;
+
+  form
+    .show(player)
+    .then((res) => {
+      session.formOpen = false;
+      if (res.canceled) {
+        if (res.cancelationReason === "UserBusy")
+          system.runTimeout(() => showNanoForm(session, req), 10);
+        // UserClosed (Échap) : l'édition continue, l'appel reste pendant.
+        return;
+      }
+      finishBookEdit(session, req, res.selection === 0);
+    })
+    .catch((e) => {
+      session.formOpen = false;
+      player.sendMessage(`§clinucraft: nano: ${e}`);
+    });
+}
+
+// Enregistrer (save=true) ou Annuler : reprend le livre et complète l'appel.
+function finishBookEdit(session, req, save) {
+  const { player, machine } = session;
+  let result;
+  try {
+    const found = takeNanoBook(player, req.payload.path);
+    if (!save) result = { saved: false };
+    else if (!found) result = { error: "livre introuvable — édition annulée" };
+    else if (!found.pages) result = { error: "livre illisible (signé ?) — édition annulée" };
+    else result = { saved: true, pages: found.pages };
+  } catch (e) {
+    result = { error: `lecture du livre impossible: ${e}` };
+  }
+  if (!machine.kernel.completeHostCall(req.id, result)) {
+    // Le processus est mort entre-temps (kill) : le livre est déjà repris.
+    try {
+      player.sendMessage("§7nano: la session a expiré, livre repris.");
+    } catch {}
+  }
+}
+
+// Retrouve le livre conjuré (par nameTag exact), le RETIRE de l'inventaire et
+// renvoie { pages } ({ pages:null } si illisible). null si introuvable.
+function takeNanoBook(player, path) {
+  const container = player.getComponent("minecraft:inventory")?.container;
+  if (!container) return null;
+  const tag = NANO_MARK + path;
+  for (let i = 0; i < container.size; i++) {
+    const item = container.getItem(i); // copie de lecture
+    if (!item || item.nameTag !== tag) continue;
+    let pages = null;
+    try {
+      const book = item.getComponent("minecraft:book");
+      if (book && !book.isSigned) pages = book.contents.map((p) => p ?? "");
+    } catch {}
+    container.setItem(i, undefined); // reprend le livre
+    return { pages };
+  }
+  return null;
+}
+
+// Retire les livres nano de l'inventaire, sauf ceux listés dans `keep`
+// (nameTags des éditions encore en cours). Best-effort : jamais bloquant.
+function sweepNanoBooks(player, keep = new Set()) {
+  try {
+    const container = player.getComponent("minecraft:inventory")?.container;
+    if (!container) return;
+    for (let i = 0; i < container.size; i++) {
+      const item = container.getItem(i);
+      if (!item || typeof item.nameTag !== "string") continue;
+      if (!item.nameTag.startsWith(NANO_MARK)) continue;
+      if (keep.has(item.nameTag)) continue;
+      container.setItem(i, undefined);
+    }
+  } catch {}
+}
+
+// nameTags des livres appartenant aux éditions encore en cours (à épargner).
+function keepTagsFor(machine, exceptId) {
+  const keep = new Set();
+  for (const r of machine.kernel.hostCalls())
+    if (r.kind === "bookEdit" && r.id !== exceptId) keep.add(NANO_MARK + r.payload.path);
+  return keep;
 }

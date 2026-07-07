@@ -33,6 +33,8 @@ export function createKernel({ vfs, tty, programs }) {
   let nextPid = 1;
   let ticks = 0;
   let rrCursor = 0; // rotation round-robin de l'ordre d'ordonnancement
+  let hostSeq = 0; // ids des requêtes hôte
+  const hostReqs = new Map(); // id -> requête hôte non complétée (voir case "host")
 
   const kernel = {
     vfs,
@@ -88,6 +90,25 @@ export function createKernel({ vfs, tty, programs }) {
       }));
     },
 
+    // --- Canal hôte -------------------------------------------------------
+    // `yield SYS.host(kind, payload)` bloque le processus jusqu'à ce que la
+    // couche plateforme (terminal.js en jeu, un stub en test) appelle
+    // completeHostCall(id, result). Le noyau transporte payload et result
+    // verbatim : le contrat (pages, saved, error…) appartient aux deux bouts.
+    onHostCall: null, // callback (req) => void, câblé comme tty.wantInput
+    hostCalls() {
+      return [...hostReqs.values()]
+        .filter((r) => !r.done)
+        .map(({ id, pid, kind, payload }) => ({ id, pid, kind, payload }));
+    },
+    completeHostCall(id, result) {
+      const req = hostReqs.get(id);
+      if (!req || req.done) return false;
+      req.done = true;
+      req.result = result;
+      return true;
+    },
+
     // Un battement de noyau : fait avancer les processus dans la limite du
     // budget (pas ET temps réel — un `while(true)` interprété rend chaque pas
     // coûteux, seul le temps protège vraiment du watchdog). Le budget de pas
@@ -132,6 +153,7 @@ export function createKernel({ vfs, tty, programs }) {
       pending: null, // syscall en attente (processus BLOCKED)
       exitCode: 0,
       wakeTick: null, // pour sleep()
+      hostReq: null, // requête hôte en attente (voir case "host")
     };
     procs.set(proc.pid, proc);
     if (!fn) {
@@ -195,6 +217,12 @@ export function createKernel({ vfs, tty, programs }) {
     if (proc.state === "zombie") return;
     proc.exitCode = code;
     proc.state = "zombie";
+    // Une requête hôte en attente meurt avec le processus (kill pendant nano) :
+    // completeHostCall renverra false et la plateforme fera son ménage.
+    if (proc.hostReq) {
+      hostReqs.delete(proc.hostReq.id);
+      proc.hostReq = null;
+    }
     // Fermer tous les descripteurs (libère les tubes → EOF pour les lecteurs).
     for (const ofd of proc.fds) if (ofd && ofd.backend.close) ofd.backend.close(ofd);
     proc.fds = [];
@@ -314,6 +342,18 @@ export function createKernel({ vfs, tty, programs }) {
         return { value: vfs.stat(vfs.resolve(proc.cwd, sc.path)) };
       }
 
+      case "access": {
+        // Teste un droit (r|w|x) sans ouvrir ni créer : mêmes règles que
+        // doOpen/permit. Utilisé par nano pour vérifier AVANT l'édition.
+        const segs = vfs.resolve(proc.cwd, sc.path);
+        const abs = joinPath(segs);
+        if (abs.startsWith("/dev/")) return { value: 0 };
+        if (abs.startsWith("/proc")) return { value: sc.need === "r" ? 0 : E.ACCES };
+        const node = vfs.getNode(segs);
+        if (!node) return { value: E.NOENT };
+        return { value: permit(proc, node, sc.need) ? 0 : E.ACCES };
+      }
+
       case "readdir": {
         const segs = vfs.resolve(proc.cwd, sc.path);
         const abs = joinPath(segs);
@@ -406,6 +446,33 @@ export function createKernel({ vfs, tty, programs }) {
         if (ticks >= proc.wakeTick) {
           proc.wakeTick = null;
           return { value: 0 };
+        }
+        return { block: true };
+      }
+
+      case "host": {
+        // Requête à la couche plateforme : créée une seule fois (le descripteur
+        // en attente est re-dispatché à chaque tick, comme sleep), puis on
+        // bloque jusqu'à completeHostCall. Une complétion synchrone dans le
+        // callback (stub de test) résout sans jamais bloquer.
+        if (!proc.hostReq) {
+          const req = { id: ++hostSeq, pid: proc.pid, kind: sc.kind, payload: sc.payload, done: false, result: undefined };
+          proc.hostReq = req;
+          hostReqs.set(req.id, req);
+          if (kernel.onHostCall) {
+            try {
+              kernel.onHostCall({ id: req.id, pid: req.pid, kind: req.kind, payload: req.payload });
+            } catch (e) {
+              // Un plantage de la plateforme ne doit pas paniquer le noyau.
+              kernel.completeHostCall(req.id, { error: `hôte: ${e && e.message ? e.message : e}` });
+            }
+          }
+        }
+        const req = proc.hostReq;
+        if (req.done) {
+          proc.hostReq = null;
+          hostReqs.delete(req.id);
+          return { value: req.result };
         }
         return { block: true };
       }

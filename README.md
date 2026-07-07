@@ -56,6 +56,25 @@ exécutable (`chmod +x mon.sh`), lance `./mon.sh args` (ou `sh mon.sh`,
 **`^C`** (tape littéralement `^C` dans le terminal) interrompt le programme
 d'avant-plan — indispensable face à un `while true`. Les jobs `&` survivent.
 
+## L'éditeur (`nano`)
+
+Fini le `echo >>` ligne à ligne : `nano <fichier>` édite (ou crée) un fichier
+via un **livre-plume éphémère** — la vraie zone de texte multiligne de Bedrock.
+
+1. Le contenu du fichier est copié dans un livre-plume qui apparaît dans ton
+   inventaire (impossible à jeter ou à déposer dans un coffre : il n'existe que
+   le temps de l'édition).
+2. Ferme le menu (Échap) et édite le livre dans l'interface native du jeu.
+   **Ne le signe pas.**
+3. Retape `linucraft` : le formulaire nano revient → **Enregistrer** écrit le
+   fichier et reprend le livre ; **Annuler** laisse le fichier intact.
+
+Conventions : un saut de page équivaut à un saut de ligne. Limites héritées du
+livre Bedrock : 50 pages de 256 caractères (~12 Ko), 256 caractères max par
+ligne. Les permissions s'appliquent comme partout (`sudo nano /etc/motd` pour
+un fichier root) ; en cas de déconnexion pendant une édition, le livre orphelin
+est repris à la prochaine session.
+
 ## Le moteur JavaScript (`js` / `node`)
 
 Le cœur du projet : un **interprète JavaScript écrit en JavaScript** (eval est
@@ -87,8 +106,9 @@ console.log(process.argv[2], process.env.USER, __filename);
 process.exit(0);
 ```
 
-Écris un programme en jeu ligne à ligne (`echo '...' >> prog.js`), puis
-`chmod +x prog.js` et `./prog.js` — ou lance-le sans bit x via `js prog.js`.
+Écris un programme en jeu avec `nano prog.js` (ou ligne à ligne via
+`echo '...' >> prog.js`), puis `chmod +x prog.js` et `./prog.js` — ou lance-le
+sans bit x via `js prog.js`.
 
 ## Le système (noyau, processus, FS)
 
@@ -147,7 +167,8 @@ Double-clique sur le `.mcaddon` (côté Windows) : Minecraft importe les packs.
 ### Activer dans un monde
 
 Crée/édite un monde → **Packs de comportements** : ajoute « linucraft ». Le pack
-de ressources suit (dépendance). Aucune API beta à cocher. Minecraft ~1.21.90+.
+de ressources suit (dépendance). Aucune API beta à cocher. Minecraft ~1.21.100+
+(module `@minecraft/server` 2.2.0, requis par `nano`/livre-plume).
 Les mondes créés avec une ancienne version sont migrés (les nouveaux binaires
 apparaissent dans `/bin` au chargement).
 
