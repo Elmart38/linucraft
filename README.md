@@ -25,8 +25,7 @@ Ce projet a été principalement codé en Vibe coding.
 
 ## Lancer le terminal
 
-- Commande : **`/linucraft:start`** (l'API Bedrock impose un namespace).
-- Ou bien : taper **`linucraft`** dans le chat (sans `/`).
+Commande : **`/linucraft:start`** (l'API Bedrock impose un namespace).
 
 Écran de boot → bouton → le terminal s'ouvre (scrollback en haut, saisie en
 bas). Chaque commande validée rouvre la fenêtre avec la sortie. **Échap** ferme
