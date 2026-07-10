@@ -216,8 +216,11 @@ export function* cp(ctx) {
 }
 
 export function* mv(ctx) {
+  // Copie puis supprime, en préservant le mode (sinon le bit x se perdait).
+  const st = yield ctx.sys.stat(ctx.argv[1]);
   const code = yield* cp(ctx);
   if (code !== 0) return code;
+  if (st && st.mode != null) yield ctx.sys.chmod(ctx.argv[2], st.mode);
   yield ctx.sys.unlink(ctx.argv[1]);
   return 0;
 }
@@ -412,11 +415,11 @@ export function* neofetch(ctx) {
   const logo = [
     "_         ",
     "\\\\        ",
-    " \\\\       ",
+    " \\\\       ", // Pour le futur logo : 🙽 et 🙼
     "  \\\\      ",
-    "  // §2████§r",
-    " //  §4████§r",
-    "//   §4████§r",
+    "  // §2███§r",
+    " //  §4███§r",
+    "//   §4███§r",
     "‾            ",
   ];
   const n = Math.max(logo.length, info.length);

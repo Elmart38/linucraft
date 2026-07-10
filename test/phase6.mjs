@@ -2,7 +2,7 @@
 // canal hôte du noyau (blocage/complétion), permissions, annulation, limites.
 import { boot, sh, makeAsserter, settle, screen } from "./lib.mjs";
 import { splitPath } from "../linucraft_BP/scripts/os/vfs.js";
-import { textToPages, pagesToText, PAGES_MAX } from "../linucraft_BP/scripts/os/bin/nano.js";
+import { textToPages, pagesToText, visualLines, PAGES_MAX, PAGE_LINES } from "../linucraft_BP/scripts/os/bin/nano.js";
 
 const A = makeAsserter("linucraft — Phase 6 (nano / canal hôte)");
 
@@ -41,10 +41,15 @@ function readVfs(m, p) {
   A.eq("round-trip simple", pagesToText(textToPages("a\nb\n").pages), "a\nb\n");
   A.eq("round-trip lignes vides", pagesToText(textToPages("a\n\n\nb\n").pages), "a\n\n\nb\n");
   A.eq("normalisation sans \\n final", pagesToText(textToPages("a").pages), "a\n");
-  const l256 = "x".repeat(256);
-  A.eq("ligne de 256 pile = page seule", JSON.stringify(textToPages(l256 + "\ny\n").pages), JSON.stringify([l256, "y"]));
-  A.has("ligne de 257 → erreur", textToPages("x".repeat(257) + "\n").error, "trop longue");
-  A.has("51 pages → erreur", textToPages(("z".repeat(256) + "\n").repeat(PAGES_MAX + 1)).error, "trop grand");
+  // Limites VISUELLES de l'éditeur : 14 lignes/page, ~17 caractères/rangée.
+  const lmax = "x".repeat(238); // 14 rangées de 17 caractères pile
+  A.eq("ligne de 238 remplit une page seule", JSON.stringify(textToPages(lmax + "\ny\n").pages), JSON.stringify([lmax, "y"]));
+  A.has("ligne de 239 → erreur", textToPages("x".repeat(239) + "\n").error, "trop longue");
+  A.has("51 pages → erreur", textToPages((lmax + "\n").repeat(PAGES_MAX + 1)).error, "trop grand");
+  A.eq("14 lignes courtes = une page", textToPages("a\n".repeat(PAGE_LINES)).pages.length, 1);
+  A.eq("15 lignes courtes = deux pages", textToPages("a\n".repeat(PAGE_LINES + 1)).pages.length, 2);
+  A.eq("césure par mots comptée (3 rangées)", visualLines("aaaaaaaaaa bbbbbbbbbb cccccccccc"), 3);
+  A.eq("mot long coupé dur (200 car. = 12 rangées)", visualLines("A".repeat(200)), 12);
   A.eq("page undefined → ligne vide", pagesToText([undefined, "x"]), "\nx\n");
   const deux = "A".repeat(200) + "\n" + "B".repeat(200) + "\n";
   A.eq("multi-pages : 2 pages", textToPages(deux).pages.length, 2);
@@ -117,11 +122,32 @@ function readVfs(m, p) {
   A.has("usage deux arguments", sh(m, "nano a b"), "usage");
   A.has("dossier → Is a directory", sh(m, "nano /etc"), "Is a directory");
   A.has("parent inexistant", sh(m, "nano /nulle/part.txt"), "No such file");
+  A.has("fichier spécial /dev refusé", sh(m, "nano /dev/zero"), "non éditable");
+  A.has("fichier spécial /proc refusé", sh(m, "nano /proc/uptime"), "non éditable");
   seedFile(m, "/home/elwin/long.txt", "x".repeat(300) + "\n");
   A.has("ligne trop longue refusée", sh(m, "nano long.txt"), "trop longue");
-  seedFile(m, "/home/elwin/gros.txt", ("y".repeat(256) + "\n").repeat(60));
+  seedFile(m, "/home/elwin/gros.txt", ("y".repeat(238) + "\n").repeat(60));
   A.has("fichier trop grand refusé", sh(m, "nano gros.txt"), "trop grand");
   A.eq("hôte jamais sollicité", called, 0);
+}
+
+// --- Régression : recharger un fichier multi-pages ne tasse pas tout en page 1 ---
+{
+  const m = boot();
+  const p1 = Array.from({ length: 10 }, (_, i) => "ligne " + (i + 1)).join("\n");
+  const p2 = Array.from({ length: 10 }, (_, i) => "suite " + (i + 1)).join("\n");
+  autoHost(m, () => ({ saved: true, pages: [p1, p2] }));
+  sh(m, "nano deux.txt"); // création : le joueur écrit 2 pages
+  let recu = null;
+  autoHost(m, (req) => {
+    recu = req.payload.pages;
+    return { saved: false };
+  });
+  sh(m, "nano deux.txt"); // rechargement du même fichier
+  A.check("rechargé sur plusieurs pages", !!recu && recu.length >= 2, `pages=${recu && recu.length}`);
+  A.check("chaque page tient dans l'éditeur (≤ 14 lignes visuelles)",
+    !!recu && recu.every((p) => p.split("\n").reduce((n, l) => n + visualLines(l), 0) <= PAGE_LINES),
+    JSON.stringify(recu));
 }
 
 // --- Permissions ----------------------------------------------------------------

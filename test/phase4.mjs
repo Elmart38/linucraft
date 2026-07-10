@@ -57,15 +57,51 @@ const A = makeAsserter("linucraft — Phase 4 (FS v2)");
   A.has("su vers un utilisateur inconnu échoue", sh(m, "su fantome"), "n'existe pas");
 }
 
-// --- uid distinct par utilisateur (plus tous à 1000) -----------------------
+// --- uids séquentiels façon Linux (1000, 1001, …) dans un même monde --------
 {
-  const a = boot({ userId: "alice-id" });
-  const b = boot({ userId: "bob-id" });
-  A.check("uids distincts selon le joueur",
-    a.vfs.USER_UID !== b.vfs.USER_UID && a.vfs.USER_UID > 0 && b.vfs.USER_UID > 0,
-    `alice=${a.vfs.USER_UID} bob=${b.vfs.USER_UID}`);
-  A.check("uid stable pour un même joueur",
-    boot({ userId: "alice-id" }).vfs.USER_UID === a.vfs.USER_UID, "instable");
+  const storage = makeStorage();
+  const a = boot({ storage, user: "alice", userId: "alice-id" });
+  const b = boot({ storage, user: "bob", userId: "bob-id" });
+  const c = boot({ storage, user: "carla", userId: "carla-id" });
+  A.eq("premier utilisateur = 1000", a.vfs.USER_UID, 1000);
+  A.eq("deuxième utilisateur = 1001", b.vfs.USER_UID, 1001);
+  A.eq("troisième utilisateur = 1002", c.vfs.USER_UID, 1002);
+  A.eq("uid stable pour un même joueur",
+    boot({ storage, user: "alice", userId: "alice-id" }).vfs.USER_UID, 1000);
+}
+
+// --- Migration : un home v2.0–2.2 (uid haché) passe à l'uid séquentiel ------
+{
+  // Même hachage djb2 que les versions 2.0–2.2.
+  const hashUid = (userId) => {
+    const s = String(userId);
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+    return 1000 + (h % 9000);
+  };
+  const storage = makeStorage();
+  const old = hashUid("p1");
+  storage.set("linucraft:home_p1", JSON.stringify({
+    t: "d", m: 0o755, u: old, g: old,
+    c: {
+      "ancien.txt": { t: "f", d: "hérité\n", m: 0o644, u: old, g: old },
+      "verrou.root": { t: "f", d: "", m: 0o644, u: 0, g: 0 },
+    },
+  }));
+  const m = boot({ storage }); // user elwin, userId p1
+  A.eq("uid séquentiel après migration", m.vfs.USER_UID, 1000);
+  A.has("fichier hérité réattribué", sh(m, "stat ancien.txt"), "Uid: 1000");
+  A.has("fichier root préservé", sh(m, "stat verrou.root"), "Uid: 0");
+  A.eq("écriture possible après migration",
+    (sh(m, "echo neuf >> ancien.txt"), sh(m, "cat ancien.txt")), "hérité\nneuf");
+}
+
+// --- mv préserve le mode -----------------------------------------------------
+{
+  const m = boot();
+  sh(m, "touch prog && chmod 755 prog");
+  sh(m, "mv prog outil");
+  A.has("mv préserve le bit x", sh(m, "ls -l outil"), "-rwxr-xr-x");
 }
 
 // --- Symlinks --------------------------------------------------------------

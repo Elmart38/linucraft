@@ -69,8 +69,10 @@ via un **livre-plume éphémère** — la vraie zone de texte multiligne de Bedr
    fichier et reprend le livre ; **Annuler** laisse le fichier intact.
 
 Conventions : un saut de page équivaut à un saut de ligne. Limites héritées du
-livre Bedrock : 50 pages de 256 caractères (~12 Ko), 256 caractères max par
-ligne. Les permissions s'appliquent comme partout (`sudo nano /etc/motd` pour
+livre Bedrock : 50 pages, et l'éditeur n'affiche que 14 lignes par page — nano
+empaquette le fichier en conséquence (lignes de ~238 caractères max) pour que
+chaque page reste entièrement visible et éditable.
+Les permissions s'appliquent comme partout (`sudo nano /etc/motd` pour
 un fichier root) ; en cas de déconnexion pendant une édition, le livre orphelin
 est repris à la prochaine session.
 
