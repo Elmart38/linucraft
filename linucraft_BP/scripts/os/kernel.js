@@ -489,6 +489,9 @@ export function createKernel({ vfs, tty, programs }) {
       case "hasProgram":
         return { value: !!programs[basename(sc.name)] };
 
+      case "listPrograms":
+        return { value: Object.keys(programs) };
+
       case "usage":
         return { value: vfs.usage() };
 

@@ -7,6 +7,7 @@
 import { sh } from "./sh.js";
 import { js } from "./js.js";
 import { nano } from "./nano.js";
+import { apt } from "./apt.js";
 import * as cu from "./coreutils.js";
 import * as fu from "./fsutils.js";
 
@@ -15,6 +16,7 @@ export const programs = {
   js,
   node: js, // alias familier pour le REPL et les scripts
   nano,
+  apt,
   kill: cu.kill,
   chmod: fu.chmod,
   chown: fu.chown,

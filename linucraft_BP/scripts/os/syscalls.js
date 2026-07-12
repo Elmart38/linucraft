@@ -50,6 +50,7 @@ export const SYS = {
   // --- divers ---
   ps: () => ({ sys: "ps" }), // liste des processus (pour /bin/ps et /proc)
   hasProgram: (name) => ({ sys: "hasProgram", name }), // un binaire /bin/<name> existe-t-il ?
+  listPrograms: () => ({ sys: "listPrograms" }), // noms des programmes du registre (pour apt)
   usage: () => ({ sys: "usage" }), // occupation du FS (pour df)
   access: (path, need = "r") => ({ sys: "access", path, need }), // teste un droit (r|w|x) sans ouvrir ni créer
   host: (kind, payload) => ({ sys: "host", kind, payload }), // requête bloquante à la couche plateforme (Minecraft)
